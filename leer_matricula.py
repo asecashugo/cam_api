@@ -1,10 +1,8 @@
 import cv2
-print(1)
 import easyocr
-print(2)
 import os
 import dynamodb
-import urllib.request
+import cap_mgr
 import time
 from roi_utils import show_plate_roi
 from plate_format import extract_plate
@@ -17,9 +15,9 @@ if plate_cascade.empty():
     print("Error loading cascade classifier! The file may be corrupted or incompatible with your OpenCV version.")
     exit()
 
-cap = cv2.VideoCapture(0)
+cap = cap_mgr.get_cap('rtsp')
 # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 2560)
-# cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1440)
+# cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1440)q
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 cap.set(cv2.CAP_PROP_FPS, 30)
