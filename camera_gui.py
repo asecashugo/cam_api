@@ -4,10 +4,10 @@ import time
 import cv2
 from tkinter import Tk, Label, Button
 from PIL import Image, ImageTk
-from tkinter import Frame
+from ptz_commands import PTZCommands
 
 
-class CameraGUI:
+class CameraGUI(PTZCommands):
     def __init__(self, master, cap, plate_cascade, reader, extract_plate, show_plate_roi, dynamodb, onvif_camera=None):
         self.master = master
         self.cap = cap
@@ -20,6 +20,8 @@ class CameraGUI:
         self.ptz = None
         self.media = None
         self.profile = None
+        self.est_pan_angle_deg = 0
+        self.est_tilt_angle_deg = 0
         if self.onvif_camera:
             try:
                 self.ptz = self.onvif_camera.create_ptz_service()
@@ -89,15 +91,35 @@ class CameraGUI:
         btn_start_stopmotion.pack(pady=2)
         btn_stop_stopmotion = Button(master, text="Stop Stopmotion", command=self.stop_stopmotion, bg='orange', fg='black', font=('Arial', 12, 'bold'))
         btn_stop_stopmotion.pack(pady=2)
+        btn_go_origin = Button(master, text="Go Origin", command=self.hard_origin, bg='purple', fg='white', font=('Arial', 12, 'bold'))
+        btn_go_origin.pack(pady=5)
+        btn_go_home = Button(master, text="🏠", command=self.go_home, bg='purple', fg='white', font=('Arial', 12, 'bold'))
+        btn_go_home.pack(pady=5)
         self.last_detection_time = 0
         self.plates = []
         self.plate_texts = []
+        from tkinter import Entry
+        angle_frame = Frame(master)
+        angle_frame.pack(pady=5)
+        Label(angle_frame, text="Est. Pan Angle (deg):").pack(side='left')
+        self.pan_angle_entry = Entry(angle_frame, width=8)
+        self.pan_angle_entry.pack(side='left', padx=5)
+        Label(angle_frame, text="Est. Tilt Angle (deg):").pack(side='left')
+        self.tilt_angle_entry = Entry(angle_frame, width=8)
+        self.tilt_angle_entry.pack(side='left', padx=5)
+        self.update_angle_entries()  # Initialize with current values
         self.update_frame()
         self.Get_Status()
 
     def set_resolution(self, width):
         self.current_resolution = width
         print(f"Resolution set to width: {width}")
+
+    def update_angle_entries(self):
+        self.pan_angle_entry.delete(0, 'end')
+        self.pan_angle_entry.insert(0, f"{self.est_pan_angle_deg:.2f}")
+        self.tilt_angle_entry.delete(0, 'end')
+        self.tilt_angle_entry.insert(0, f"{self.est_tilt_angle_deg:.2f}")
 
     def update_frame(self):
         ret, frame = self.cap.read()
@@ -140,47 +162,9 @@ class CameraGUI:
         self.panel.config(image=imgtk)
         self.master.after(20, self.update_frame)
 
-    def pan(self, direction):
-        if not self.ptz or not self.profile:
-            print("ONVIF PTZ service not available")
-            return
-        req = self.ptz.create_type('ContinuousMove')
-        req.ProfileToken = self.profile.token
-        req.Velocity = {'PanTilt': {'x': 0.2 if direction == 'right' else -0.2, 'y': 0}}
-        self.ptz.ContinuousMove(req)
-
-    def pan_left(self):
-        threading.Thread(target=self.pan_speed, args=('left',), daemon=True).start()
-
-    def pan_right(self):
-        threading.Thread(target=self.pan_speed, args=('right',), daemon=True).start()
-
     def set_pt_speed(self, speed):
         self.pt_speed = speed
         print(f"PanTilt speed set to {speed}")
-
-    def pan_speed(self, direction, speed=None):
-        if not self.ptz or not self.profile:
-            print("ONVIF PTZ service not available")
-            return
-        if speed is None:
-            speed = self.pt_speed
-        req = self.ptz.create_type('ContinuousMove')
-        req.ProfileToken = self.profile.token
-        req.Velocity = {'PanTilt': {'x': speed if direction == 'right' else -speed, 'y': 0}}
-        self.ptz.ContinuousMove(req)
-
-    def stop_ptz(self):
-        if not self.ptz or not self.profile:
-            print("ONVIF PTZ service not available")
-            return
-        try:
-            print(self.ptz.Stop({'ProfileToken': self.profile.token,
-                           'PanTilt': True,
-                           'Zoom': True}))
-            print("PTZ movement stopped.")
-        except Exception as e:
-            print(f"Could not stop PTZ: {e}")
 
     def get_pan_position(self):
         if not self.ptz or not self.profile:
@@ -262,39 +246,6 @@ class CameraGUI:
             'ForcePersistence': False
         })
 
-    def tilt_up(self):
-        threading.Thread(target=self.tilt_speed, args=('up',), daemon=True).start()
-
-    def tilt_down(self):
-        threading.Thread(target=self.tilt_speed, args=('down',), daemon=True).start()
-
-    def tilt_speed(self, direction, speed=None):
-        if not self.ptz or not self.profile:
-            print("ONVIF PTZ service not available")
-            return
-        if speed is None:
-            speed = self.pt_speed
-        req = self.ptz.create_type('ContinuousMove')
-        req.ProfileToken = self.profile.token
-        req.Velocity = {'PanTilt': {'x': 0, 'y': speed if direction == 'up' else -speed}}
-        self.ptz.ContinuousMove(req)
-
-    def zoom_in(self):
-        threading.Thread(target=self.zoom_speed, args=(1,), daemon=True).start()
-
-    def zoom_out(self):
-        threading.Thread(target=self.zoom_speed, args=(-1,), daemon=True).start()
-
-    def zoom_speed(self, direction):
-        if not self.ptz or not self.profile:
-            print("ONVIF PTZ service not available")
-            return
-        speed = self.pt_speed
-        req = self.ptz.create_type('ContinuousMove')
-        req.ProfileToken = self.profile.token
-        req.Velocity = {'Zoom': {'x': speed * direction}}
-        self.ptz.ContinuousMove(req)
-
     def take_picture(self):
         ret, frame = self.cap.read()
         if not ret:
@@ -316,6 +267,7 @@ class CameraGUI:
         from datetime import datetime
         self.stopmotion_folder = datetime.now().strftime('output/stopmotion/%Y%m%d_%H%M%S')
         os.makedirs(self.stopmotion_folder, exist_ok=True)
+        os.makedirs(os.path.join(self.stopmotion_folder, 'pictures'), exist_ok=True)
         self.stopmotion_running = True
         print(f"Stopmotion started. Saving to {self.stopmotion_folder}")
         self._stopmotion_loop()
@@ -326,7 +278,7 @@ class CameraGUI:
         ret, frame = self.cap.read()
         if ret:
             from datetime import datetime
-            filename = datetime.now().strftime(f'{self.stopmotion_folder}/%Y%m%d_%H%M%S.jpg')
+            filename = datetime.now().strftime(f'{self.stopmotion_folder}/pictures/%Y%m%d_%H%M%S.jpg')
             # Save at 3840x2160
             frame_highres = cv2.resize(frame, (3840, 2160), interpolation=cv2.INTER_CUBIC)
             cv2.imwrite(filename, frame_highres)
@@ -337,6 +289,8 @@ class CameraGUI:
         if self.stopmotion_running:
             self.stopmotion_running = False
             print("Stopmotion stopped.")
+            import stopmotion
+            stopmotion.create_stopmotion_video(self.stopmotion_folder, fps=30)
         else:
             print("Stopmotion is not running.")
 
