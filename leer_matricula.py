@@ -22,7 +22,7 @@ def main():
         environ = json.load(f)
     pw = environ.get("pw", "admin")
     wsdl_dir=os.path.join('C:\\', 'Users', 'Hugo', 'AppData', 'Roaming', 'Python', 'Lib', 'site-packages', 'wsdl')
-    onvif_camera = ONVIFCamera('192.168.1.149', 8080, 'admin', pw, wsdl_dir=wsdl_dir)
+    onvif_camera = ONVIFCamera('192.168.1.139', 8080, 'admin', pw, wsdl_dir=wsdl_dir)
     print(f"ONVIF Camera initialized: {onvif_camera.devicemgmt.GetDeviceInformation()}")
     cap = cap_mgr.get_cap('rtsp')
     os.makedirs('output', exist_ok=True)

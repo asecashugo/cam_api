@@ -107,9 +107,17 @@ class CameraGUI(PTZCommands):
         Label(angle_frame, text="Est. Tilt Angle (deg):").pack(side='left')
         self.tilt_angle_entry = Entry(angle_frame, width=8)
         self.tilt_angle_entry.pack(side='left', padx=5)
+        btn_goto_abs = Button(master, text="Go To Abs", command=lambda: self.abs_pantilt_gui, bg='cyan', fg='black', font=('Arial', 12, 'bold'))
+        btn_goto_abs.pack(pady=5)
         self.update_angle_entries()  # Initialize with current values
         self.update_frame()
         self.Get_Status()
+        # --- Add non-editable text box for current pan, tilt, zoom ---
+        from tkinter import StringVar
+        self.ptz_status_var = StringVar()
+        self.ptz_status_var.set(self.get_ptz_status_text())
+        self.ptz_status_label = Label(master, textvariable=self.ptz_status_var, font=('Arial', 12), bg='#f0f0f0', width=40, anchor='w')
+        self.ptz_status_label.pack(pady=5)
 
     def set_resolution(self, width):
         self.current_resolution = width
@@ -294,6 +302,11 @@ class CameraGUI(PTZCommands):
         else:
             print("Stopmotion is not running.")
 
+    def get_ptz_status_text(self):
+        return f"Current: Pan={self.est_pan_angle_deg:.2f}°, Tilt={self.est_tilt_angle_deg:.2f}°"
+
+    def refresh_ptz_status(self):
+        self.ptz_status_var.set(self.get_ptz_status_text())
 
 def start_gui(cap, plate_cascade, reader, extract_plate, show_plate_roi, dynamodb, onvif_camera=None):
     root = Tk()

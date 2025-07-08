@@ -1,7 +1,7 @@
 import time
 import threading
 
-MAX_TILT_TIME_S=5
+MAX_TILT_TIME_S=4.5
 MAX_TILT_ANGLE=0
 MIN_TILT_ANGLE=-90
 
@@ -101,65 +101,66 @@ class PTZCommands:
 
         print('Origin position reached.')
     
-    def hard_origin(self):
+    def hard_origin(self, blocking=True):
         print("Moving to hard origin position...")
-        self.rel_pan(-(MAX_PAN_ANGLE-MIN_PAN_ANGLE))
-        self.rel_tilt(-(MAX_TILT_ANGLE-MIN_TILT_ANGLE))
+        self.rel_pan(-(MAX_PAN_ANGLE-MIN_PAN_ANGLE), blocking=blocking)
+        self.rel_tilt(-(MAX_TILT_ANGLE-MIN_TILT_ANGLE), blocking=blocking)
         self.est_pan_angle_deg = MIN_PAN_ANGLE+ORIGIN_PAN_OFFSET_TO_NORTH_DEG
         self.est_tilt_angle_deg = MIN_TILT_ANGLE
 
-    def rel_pan(self,angle_deg):
-        # print(f'    ({round(angle_deg)},0)') if angle_deg>0 else print(f'    ({round(-angle_deg)},0)')
-        if angle_deg>0:
-            print(f'    RIGHT {round(angle_deg)} deg')
-        else:
-            print(f'    LEFT {round(-angle_deg)} deg')
-        if angle_deg > 0:
-            self.pan_right()
-        elif angle_deg < 0:
-            self.pan_left()
-        time.sleep(abs(angle_deg) / pan_speed_degps)
-        self.est_pan_angle_deg += angle_deg
-    
-    def rel_tilt(self, angle_deg):
-        # print(f'    (0,{round(angle_deg)})') if angle_deg>0 else print(f'    (0,{round(-angle_deg)})')
-        if angle_deg > 0:
-            print(f'    UP {round(angle_deg)} deg')
-        else:
-            print(f'    DOWN {round(-angle_deg)} deg')
-        if angle_deg > 0:
-            self.tilt_up()
-        elif angle_deg < 0:
-            self.tilt_down()
-        time.sleep(abs(angle_deg) / tilt_speed_degps)
-        self.est_tilt_angle_deg += angle_deg
+    def rel_pan(self, angle_deg, blocking=False):
+        def pan_thread():
+            sleep_time = abs(angle_deg) / pan_speed_degps
+            if angle_deg > 0:
+                print(f'    RIGHT {round(angle_deg)} deg ({round(sleep_time, 2)} s)')
+                self.pan_right()
+            elif angle_deg < 0:
+                print(f'    LEFT {round(-angle_deg)} deg ({round(sleep_time, 2)} s)')
+                self.pan_left()
+            time.sleep(sleep_time)
+            self.est_pan_angle_deg += angle_deg
+            self.stop_ptz()
 
-    def absolute_pan(self, angle_deg):
-        self.rel_pan(angle_deg - self.est_pan_angle_deg)
+        t = threading.Thread(target=pan_thread, daemon=True)
+        t.start()
+        if blocking:
+            t.join()
+
+    def rel_tilt(self, angle_deg, blocking=False):
+        def tilt_thread():
+            sleep_time = abs(angle_deg) / tilt_speed_degps
+            if angle_deg > 0:
+                print(f'    UP {round(angle_deg)} deg ({round(sleep_time, 2)} s)')
+                self.tilt_up()
+            elif angle_deg < 0:
+                print(f'    DOWN {round(-angle_deg)} deg ({round(sleep_time, 2)} s)')
+                self.tilt_down()
+            time.sleep(sleep_time)
+            self.est_tilt_angle_deg += angle_deg
+            self.stop_ptz()
+
+        t = threading.Thread(target=tilt_thread, daemon=True)
+        t.start()
+        if blocking:
+            t.join()
+
+    def abs_pan(self, angle_deg, blocking=False):
+        self.rel_pan(angle_deg - self.est_pan_angle_deg, blocking=blocking)
         self.est_pan_angle_deg = angle_deg
     
-    def absolute_tilt(self, angle_deg):
-        self.rel_tilt(angle_deg - self.est_tilt_angle_deg)
+    def abs_tilt(self, angle_deg, blocking=False):
+        self.rel_tilt(angle_deg - self.est_tilt_angle_deg, blocking=blocking)
         self.est_tilt_angle_deg = angle_deg
 
+    def abs_pantilt(self, pan_tilt, blocking=True):
+        pan, tilt = pan_tilt
+        self.abs_pan(pan, blocking=blocking)
+        self.abs_tilt(tilt, blocking=blocking)
+        print(f"Moved to Pan: {pan}°, Tilt: {tilt}°")
+    
     def go_home(self):
         
         HOME_PAN_ANGLE_DEG=225
         HOME_TILT_ANGLE_DEG=0
-        self.go_origin()
-        # if HOME_PAN_ANGLE_DEG > self.est_pan_angle_deg:
-        #     self.pan_right()
-        # else:
-        #     self.pan_left()
-        # # Wait for the pan to complete
-        # time.sleep(abs(HOME_PAN_ANGLE_DEG - self.est_pan_angle_deg) / pan_speed_degps)
-        # if HOME_TILT_ANGLE_DEG > self.est_tilt_angle_deg:
-        #     self.tilt_up()
-        # else:
-        #     self.tilt_down()
-        # # Wait for the tilt to complete
-        # time.sleep((HOME_TILT_ANGLE_DEG - self.est_tilt_angle_deg) / tilt_speed_degps)
-        # self.rel_pan(HOME_PAN_ANGLE_DEG - self.est_pan_angle_deg)
-        # self.rel_tilt(HOME_TILT_ANGLE_DEG - self.est_tilt_angle_deg)
-        self.absolute_pan(HOME_PAN_ANGLE_DEG)
-        self.absolute_tilt(HOME_TILT_ANGLE_DEG)
+        self.abs_pan(HOME_PAN_ANGLE_DEG)
+        self.abs_tilt(HOME_TILT_ANGLE_DEG)
