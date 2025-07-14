@@ -291,6 +291,69 @@ async def save_current_position(name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+@app.get("/take_picture/{location}", response_model=dict)
+async def take_picture_at_location(location: str):
+    if not ptz_control:
+        raise HTTPException(status_code=503, detail="PTZ control not available")
+    
+    try:
+        # First, move to the location
+        location = location.lower()  # case-insensitive matching
+        if location not in preset_locations:
+            available_locations = list(preset_locations.keys())
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Location '{location}' not found. Available locations: {available_locations}"
+            )
+        
+        # Get the preset coordinates and move there
+        preset = preset_locations[location]
+        ptz_control.abs_pantilt((preset["pan"], preset["tilt"]))
+        ptz_control.abs_zoom(preset["zoom"])
+        
+        # Small delay to ensure camera has stopped moving
+        time.sleep(1)
+        
+        # Now take the picture
+        cap = cv2.VideoCapture(CAMERA_URL)
+        if not cap.isOpened():
+            raise HTTPException(status_code=503, detail="Could not connect to camera")
+        
+        # Read a frame
+        ret, frame = cap.read()
+        if not ret:
+            raise HTTPException(status_code=500, detail="Could not capture image")
+        
+        # Create output directory if it doesn't exist
+        os.makedirs("output/pictures", exist_ok=True)
+        
+        # Generate filename with timestamp and location name
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"output/pictures/{timestamp}_{location}.jpg"
+        
+        # Save the image
+        cv2.imwrite(filename, frame)
+        
+        # Release the capture
+        cap.release()
+        
+        return {
+            "message": f"Moved to location '{location}' and took picture",
+            "location": preset,
+            "current_position": {
+                "pan": ptz_control.est_pan_angle_deg,
+                "tilt": ptz_control.est_tilt_angle_deg,
+                "zoom": ptz_control.est_zoom_level
+            },
+            "picture": {
+                "filename": filename,
+                "timestamp": timestamp
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
