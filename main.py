@@ -6,6 +6,7 @@ import os
 from ptz_commands import PTZCommands
 import json
 import time
+import subprocess
 
 # Initialize FastAPI app
 app = FastAPI(title="Camera Control API")
@@ -16,7 +17,8 @@ with open("environ.json", "r") as f:
 pw = environ.get("pw", "admin")
 
 # Initialize camera URL
-CAMERA_URL = f"rtsp://admin:{pw}@192.168.1.139:554/12"
+CAMERA_IP = '192.168.1.139'
+CAMERA_URL = f"rtsp://admin:{pw}@{CAMERA_IP}:554/12"
 
 # Initialize PTZ commands (will be set up in startup event)
 ptz_control = None
@@ -29,48 +31,47 @@ class PTZRequest(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     global ptz_control
-    try:
-        # Initialize your PTZ control here
-        from onvif import ONVIFCamera
-        print("Connecting to camera...")
-        
-        # Get camera IP from RTSP URL
-        from urllib.parse import urlparse
-        camera_url = urlparse(CAMERA_URL)
-        camera_ip = camera_url.hostname
-        
-        # Create ONVIFCamera instance (simpler initialization like in CameraGUI)
-        # cam = ONVIFCamera(camera_ip, 80, 'admin', pw)
-        wsdl_dir=os.path.join('C:\\', 'Users', 'Hugo', 'AppData', 'Roaming', 'Python', 'Lib', 'site-packages', 'wsdl')
-        cam = ONVIFCamera('192.168.1.139', 8080, 'admin', pw, wsdl_dir='wsdl')
-        print("Camera connection established")
-        
-        # Create media service object
-        print("Creating media service...")
-        media = cam.create_media_service()
-        
-        # Create ptz service object
-        print("Creating PTZ service...")
-        ptz = cam.create_ptz_service()
+    print(f"Pinging camera at {CAMERA_URL}...")
+    # ping CAMERA_URL to check if it's reachable, with timeout
+    ping=subprocess.run(["ping", "-n", "1", "-w", "2000", CAMERA_IP], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if ping.returncode != 0:
+        raise HTTPException(status_code=503, detail="Camera is not reachable")
 
-        # Get target profile
-        print("Getting media profile...")
-        media_profile = media.GetProfiles()[0]
-        
-        # Initialize PTZ control
-        print("Initializing PTZ control...")
-        ptz_control = PTZCommands(ptz, media_profile)
-        print("PTZ control initialized successfully")
+    # Initialize your PTZ control here
+    from onvif import ONVIFCamera
+    print("Connecting to camera...")
+    
+    # Get camera IP from RTSP URL
+    from urllib.parse import urlparse
+    camera_url = urlparse(CAMERA_URL)
+    camera_ip = camera_url.hostname
+    
+    # Create ONVIFCamera instance (simpler initialization like in CameraGUI)
+    # cam = ONVIFCamera(camera_ip, 80, 'admin', pw)
+    wsdl_dir=os.path.join('C:\\', 'Users', 'Hugo', 'AppData', 'Roaming', 'Python', 'Lib', 'site-packages', 'wsdl')
+    cam = ONVIFCamera('192.168.1.139', 8080, 'admin', pw, wsdl_dir='wsdl')
+    print("Camera connection established")
+    
+    # Create media service object
+    print("Creating media service...")
+    media = cam.create_media_service()
+    
+    # Create ptz service object
+    print("Creating PTZ service...")
+    ptz = cam.create_ptz_service()
 
-        # go origin + go home
-        ptz_control.hard_origin(blocking=True)
-        ptz_control.go_home()
-        
-    except Exception as e:
-        print(f"Could not initialize ONVIF services: {e}")
-        ptz = None
-        media = None
-        ptz_control = None
+    # Get target profile
+    print("Getting media profile...")
+    media_profile = media.GetProfiles()[0]
+    
+    # Initialize PTZ control
+    print("Initializing PTZ control...")
+    ptz_control = PTZCommands(ptz, media_profile)
+    print("PTZ control initialized successfully")
+
+    # go origin + go home
+    ptz_control.hard_origin(blocking=True)
+    ptz_control.go_home()
 
 @app.get("/move")
 @app.post("/move")
