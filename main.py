@@ -100,13 +100,14 @@ async def move_camera(pan: float = None, tilt: float = None, zoom: float = None,
         if (abs(new_pan) <= 350 and abs(new_tilt) <= 90 and 
             (new_zoom is None or (0 <= new_zoom <= 1))):  # Check if within limits
             
+            # Then move zoom if specified
+            if zoom_value is not None:
+                ptz_control.abs_zoom(new_zoom)
+
             # Move pan/tilt first if specified
             if pan or tilt:
                 ptz_control.abs_pantilt((new_pan, new_tilt))
             
-            # Then move zoom if specified
-            if zoom_value is not None:
-                ptz_control.abs_zoom(new_zoom)
             
             # Build message with only the movements that were requested
             movements = []
@@ -230,8 +231,8 @@ async def move_to_preset(location: str):
         preset = preset_locations[location]
         
         # Move to the preset position
-        ptz_control.abs_pantilt((preset["pan"], preset["tilt"]))
         ptz_control.abs_zoom(preset["zoom"])
+        ptz_control.abs_pantilt((preset["pan"], preset["tilt"]))
         
         return {
             "message": f"Moved to preset location: {location}",

@@ -43,7 +43,7 @@ class PTZCommands:
             print(self.ptz.Stop({'ProfileToken': self.profile.token,
                            'PanTilt': True,
                            'Zoom': True}))
-            print(f"    ({round(self.est_pan_angle_deg), round(self.est_tilt_angle_deg)})")
+            # print(f"    ({round(self.est_pan_angle_deg), round(self.est_tilt_angle_deg)})")
         except Exception as e:
             print(f"Could not stop PTZ: {e}")
 
@@ -143,7 +143,7 @@ class PTZCommands:
             t.join()
 
     def print_position(self):
-        print(f"🛑 ({PAN_COLOR}{round(self.est_pan_angle_deg)}{RESET_COLOR}, {TILT_COLOR}{round(self.est_tilt_angle_deg)}{RESET_COLOR}, {ZOOM_COLOR}{round(self.est_zoom_level)}{RESET_COLOR})")
+        print(f"🛑 ({PAN_COLOR}{round(self.est_pan_angle_deg)}{RESET_COLOR}, {TILT_COLOR}{round(self.est_tilt_angle_deg)}{RESET_COLOR}, {ZOOM_COLOR}{round(self.est_zoom_level,2)}{RESET_COLOR})")
 
     def abs_pan(self, angle_deg, blocking=False):
         self.rel_pan(angle_deg - self.est_pan_angle_deg, blocking=blocking)
@@ -182,7 +182,6 @@ class PTZCommands:
         t.start()
         if blocking:
             t.join()
-        self.print_position()
 
     def abs_zoom(self, level, blocking=True):
         """Move to absolute zoom level between 0 (widest) and 1 (closest)"""
@@ -195,8 +194,12 @@ class PTZCommands:
             return
 
         zoom_change = level - self.est_zoom_level
+        if abs(zoom_change) < 0.01:
+            # print(f"Zoom level {level} is already set, no change needed.")
+            return
         self.rel_zoom(zoom_change, blocking=blocking)
         self.est_zoom_level = level
+        self.print_position()
 
     def abs_pantilt(self, pan_tilt, blocking=True):
         # pantilt must be done while zoom is at 0
