@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+opencv-python
+onvif-zeep
