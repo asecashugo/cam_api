@@ -9,6 +9,11 @@ MAX_PAN_TIME_S=29
 MAX_PAN_ANGLE=350
 MIN_PAN_ANGLE=0
 
+# change console colors:
+PAN_COLOR='\033[94m'  # Blue
+TILT_COLOR='\033[92m'  # Green
+RESET_COLOR='\033[0m'  # Reset to default
+
 pan_speed_degps=(MAX_PAN_ANGLE - MIN_PAN_ANGLE) / MAX_PAN_TIME_S
 tilt_speed_degps=(MAX_TILT_ANGLE - MIN_TILT_ANGLE) / MAX_TILT_TIME_S
 
@@ -112,10 +117,10 @@ class PTZCommands:
         def pan_thread():
             sleep_time = abs(angle_deg) / pan_speed_degps
             if angle_deg > 0:
-                print(f'    RIGHT {round(angle_deg)} deg ({round(sleep_time, 2)} s)')
+                print(f'    {PAN_COLOR}RIGHT {round(angle_deg)}...{RESET_COLOR} ({round(sleep_time, 2)} s)')
                 self.pan_right()
             elif angle_deg < 0:
-                print(f'    LEFT {round(-angle_deg)} deg ({round(sleep_time, 2)} s)')
+                print(f'    {PAN_COLOR}LEFT {round(-angle_deg)}...{RESET_COLOR} ({round(sleep_time, 2)} s)')
                 self.pan_left()
             time.sleep(sleep_time)
             self.est_pan_angle_deg += angle_deg
@@ -130,10 +135,10 @@ class PTZCommands:
         def tilt_thread():
             sleep_time = abs(angle_deg) / tilt_speed_degps
             if angle_deg > 0:
-                print(f'    UP {round(angle_deg)} deg ({round(sleep_time, 2)} s)')
+                print(f'    {TILT_COLOR}UP {round(angle_deg)}...{RESET_COLOR} ({round(sleep_time, 2)} s)')
                 self.tilt_up()
             elif angle_deg < 0:
-                print(f'    DOWN {round(-angle_deg)} deg ({round(sleep_time, 2)} s)')
+                print(f'    {TILT_COLOR}DOWN {round(-angle_deg)}...{RESET_COLOR} ({round(sleep_time, 2)} s)')
                 self.tilt_down()
             time.sleep(sleep_time)
             self.est_tilt_angle_deg += angle_deg
@@ -144,20 +149,29 @@ class PTZCommands:
         if blocking:
             t.join()
 
+    def print_position(self):
+        print(f"🛑 ({PAN_COLOR}{round(self.est_pan_angle_deg)}{RESET_COLOR}, {TILT_COLOR}{round(self.est_tilt_angle_deg)}{RESET_COLOR})")
+
     def abs_pan(self, angle_deg, blocking=False):
         self.rel_pan(angle_deg - self.est_pan_angle_deg, blocking=blocking)
+        angle_deg=min(max(angle_deg, MIN_PAN_ANGLE), MAX_PAN_ANGLE)
         self.est_pan_angle_deg = angle_deg
+        self.print_position()
     
     def abs_tilt(self, angle_deg, blocking=False):
         self.rel_tilt(angle_deg - self.est_tilt_angle_deg, blocking=blocking)
+        angle_deg=min(max(angle_deg, MIN_TILT_ANGLE), MAX_TILT_ANGLE)
         self.est_tilt_angle_deg = angle_deg
+        self.print_position()
 
     def abs_pantilt(self, pan_tilt, blocking=True):
-        print(f"ℹ️ abs pantilt to {pan_tilt[0]}deg ({pan_tilt[0]-self.est_pan_angle_deg} deg), {pan_tilt[1]}deg ({pan_tilt[1]-self.est_tilt_angle_deg} deg)")
         pan, tilt = pan_tilt
-        self.abs_pan(pan, blocking=blocking)
-        self.abs_tilt(tilt, blocking=blocking)
-        print(f"Moved to Pan: {pan}°, Tilt: {tilt}°")
+        if pan < tilt:
+            self.abs_pan(pan, blocking=blocking)
+            self.abs_tilt(tilt, blocking=blocking)
+        else:
+            self.abs_tilt(tilt, blocking=blocking)
+            self.abs_pan(pan, blocking=blocking)
     
     def go_home(self):
         
