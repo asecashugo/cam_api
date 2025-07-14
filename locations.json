@@ -1,0 +1,17 @@
+{
+    "terraza": {
+        "pan": 180,
+        "tilt": -30,
+        "zoom": 0
+    },
+    "bomba": {
+        "pan": 180,
+        "tilt": -30,
+        "zoom": 1
+    },
+    "tendedero": {
+        "pan": 110,
+        "tilt": -30,
+        "zoom": 0
+    }
+}

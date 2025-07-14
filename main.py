@@ -207,6 +207,89 @@ async def move_to_home():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+# Load preset locations
+with open("locations.json", "r") as f:
+    preset_locations = json.load(f)
+
+@app.get("/goto/{location}", response_model=dict)
+async def move_to_preset(location: str):
+    if not ptz_control:
+        raise HTTPException(status_code=503, detail="PTZ control not available")
+    
+    try:
+        # Find the location in presets
+        location = location.lower()  # case-insensitive matching
+        if location not in preset_locations:
+            available_locations = list(preset_locations.keys())
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Location '{location}' not found. Available locations: {available_locations}"
+            )
+        
+        # Get the preset coordinates
+        preset = preset_locations[location]
+        
+        # Move to the preset position
+        ptz_control.abs_pantilt((preset["pan"], preset["tilt"]))
+        ptz_control.abs_zoom(preset["zoom"])
+        
+        return {
+            "message": f"Moved to preset location: {location}",
+            "preset": preset,
+            "current_position": {
+                "pan": ptz_control.est_pan_angle_deg,
+                "tilt": ptz_control.est_tilt_angle_deg,
+                "zoom": ptz_control.est_zoom_level
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/savelocation/{name}", response_model=dict)
+@app.get("/savelocation/{name}", response_model=dict)
+async def save_current_position(name: str):
+    if not ptz_control:
+        raise HTTPException(status_code=503, detail="PTZ control not available")
+    
+    try:
+        # Clean the location name and validate
+        name = name.lower().strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Location name cannot be empty")
+        
+        # Get current position
+        current_position = {
+            "pan": ptz_control.est_pan_angle_deg,
+            "tilt": ptz_control.est_tilt_angle_deg,
+            "zoom": ptz_control.est_zoom_level
+        }
+        
+        # Read existing locations
+        try:
+            with open("locations.json", "r") as f:
+                locations = json.load(f)
+        except FileNotFoundError:
+            locations = {}
+        
+        # Add or update the location
+        was_updated = name in locations
+        locations[name] = current_position
+        
+        # Save back to file with pretty formatting
+        with open("locations.json", "w") as f:
+            json.dump(locations, f, indent=4)
+        
+        return {
+            "message": f"Location '{name}' {'updated' if was_updated else 'saved'}",
+            "location_name": name,
+            "position": current_position,
+            "available_locations": list(locations.keys())
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
