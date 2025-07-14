@@ -1,3 +1,4 @@
 output/
 __pycache__/
 environ.json
+venv/
