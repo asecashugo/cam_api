@@ -84,12 +84,12 @@ async def move_camera(pan: float = None, tilt: float = None, zoom: float = None,
         tilt_value = tilt if tilt is not None else (request.tilt if request else None)
         zoom_value = zoom if zoom is not None else (request.zoom if request else None)
         
-        if pan_value is None or tilt_value is None:
-            raise HTTPException(status_code=400, detail="Pan and tilt values are required")
+        if pan_value is None and tilt_value is None and zoom_value is None:
+            raise HTTPException(status_code=400, detail="At least one of pan, tilt, or zoom must be provided")
         
         # Calculate absolute position based on current position plus relative movement
-        new_pan = ptz_control.est_pan_angle_deg + pan_value
-        new_tilt = ptz_control.est_tilt_angle_deg + tilt_value
+        new_pan = ptz_control.est_pan_angle_deg + pan_value if pan_value is not None else ptz_control.est_pan_angle_deg
+        new_tilt = ptz_control.est_tilt_angle_deg + tilt_value if tilt_value is not None else ptz_control.est_tilt_angle_deg
         new_zoom = ptz_control.est_zoom_level + zoom_value if zoom_value is not None else ptz_control.est_zoom_level
         
         # First stop any ongoing movement
@@ -100,16 +100,25 @@ async def move_camera(pan: float = None, tilt: float = None, zoom: float = None,
         if (abs(new_pan) <= 350 and abs(new_tilt) <= 90 and 
             (new_zoom is None or (0 <= new_zoom <= 1))):  # Check if within limits
             
-            # Move pan/tilt first
-            ptz_control.abs_pantilt((new_pan, new_tilt))
+            # Move pan/tilt first if specified
+            if pan or tilt:
+                ptz_control.abs_pantilt((new_pan, new_tilt))
             
             # Then move zoom if specified
             if zoom_value is not None:
                 ptz_control.abs_zoom(new_zoom)
             
+            # Build message with only the movements that were requested
+            movements = []
+            if pan_value is not None:
+                movements.append(f"pan: {pan_value}")
+            if tilt_value is not None:
+                movements.append(f"tilt: {tilt_value}")
+            if zoom_value is not None:
+                movements.append(f"zoom: {zoom_value}")
+            
             return {
-                "message": f"Moving relative pan: {pan_value}, tilt: {tilt_value}" + 
-                          (f", zoom: {zoom_value}" if zoom_value is not None else ""),
+                "message": f"Moving relative {', '.join(movements)}",
                 "target_position": {
                     "pan": new_pan,
                     "tilt": new_tilt,
@@ -122,7 +131,7 @@ async def move_camera(pan: float = None, tilt: float = None, zoom: float = None,
                 }
             }
         else:
-            raise HTTPException(status_code=400, detail="Pan/Tilt values out of range")
+            raise HTTPException(status_code=400, detail=f"Pan/Tilt values out of range: {new_pan}, {new_tilt}. Zoom must be between 0 and 1 if specified: {new_zoom}")
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
