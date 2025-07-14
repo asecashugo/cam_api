@@ -9,13 +9,19 @@ MAX_PAN_TIME_S=29
 MAX_PAN_ANGLE=350
 MIN_PAN_ANGLE=0
 
+MAX_ZOOM_TIME_S = 6.0
+MAX_ZOOM_LEVEL = 1.0
+MIN_ZOOM_LEVEL = 0.0
+
 # change console colors:
 PAN_COLOR='\033[94m'  # Blue
 TILT_COLOR='\033[92m'  # Green
+ZOOM_COLOR='\033[93m'  # Yellow
 RESET_COLOR='\033[0m'  # Reset to default
 
 pan_speed_degps=(MAX_PAN_ANGLE - MIN_PAN_ANGLE) / MAX_PAN_TIME_S
 tilt_speed_degps=(MAX_TILT_ANGLE - MIN_TILT_ANGLE) / MAX_TILT_TIME_S
+zoom_speed_levelps = (MAX_ZOOM_LEVEL - MIN_ZOOM_LEVEL) / MAX_ZOOM_TIME_S
 
 ORIGIN_PAN_OFFSET_TO_NORTH_DEG=0
 
@@ -90,28 +96,15 @@ class PTZCommands:
         req.ProfileToken = self.profile.token
         req.Velocity = {'Zoom': {'x': speed * direction}}
         self.ptz.ContinuousMove(req)
-
-    def go_origin(self):
-        SAFETY_FACTOR=1.2
-        SAFETY_PAN_ANGLE= -10
-        SAFETY_TILT_ANGLE= 10
-        print("Moving to origin position...")
-        if not self.ptz or not self.profile:
-            print("ONVIF PTZ service not available")
-            return
-        if self.est_pan_angle_deg > 0:
-            self.rel_pan(min(SAFETY_PAN_ANGLE,-self.est_pan_angle_deg*SAFETY_FACTOR))
-        if self.est_tilt_angle_deg > 0:
-            self.rel_tilt(min(SAFETY_TILT_ANGLE,-self.est_tilt_angle_deg*SAFETY_FACTOR))
-
-        print('Origin position reached.')
     
     def hard_origin(self, blocking=True):
         print("Moving to hard origin position...")
+        self.rel_zoom(-(MAX_ZOOM_LEVEL-MIN_ZOOM_LEVEL), blocking=blocking)
         self.rel_pan(-(MAX_PAN_ANGLE-MIN_PAN_ANGLE), blocking=blocking)
         self.rel_tilt(-(MAX_TILT_ANGLE-MIN_TILT_ANGLE), blocking=blocking)
         self.est_pan_angle_deg = MIN_PAN_ANGLE+ORIGIN_PAN_OFFSET_TO_NORTH_DEG
         self.est_tilt_angle_deg = MIN_TILT_ANGLE
+        self.est_zoom_level = MIN_ZOOM_LEVEL
 
     def rel_pan(self, angle_deg, blocking=True):
         def pan_thread():
@@ -150,7 +143,7 @@ class PTZCommands:
             t.join()
 
     def print_position(self):
-        print(f"🛑 ({PAN_COLOR}{round(self.est_pan_angle_deg)}{RESET_COLOR}, {TILT_COLOR}{round(self.est_tilt_angle_deg)}{RESET_COLOR})")
+        print(f"🛑 ({PAN_COLOR}{round(self.est_pan_angle_deg)}{RESET_COLOR}, {TILT_COLOR}{round(self.est_tilt_angle_deg)}{RESET_COLOR}, {ZOOM_COLOR}{round(self.est_zoom_level)}{RESET_COLOR})")
 
     def abs_pan(self, angle_deg, blocking=False):
         self.rel_pan(angle_deg - self.est_pan_angle_deg, blocking=blocking)
@@ -164,7 +157,51 @@ class PTZCommands:
         self.est_tilt_angle_deg = angle_deg
         self.print_position()
 
+    def rel_zoom(self, zoom_change, blocking=True):
+        """Move relative zoom by zoom_change (positive=in, negative=out)"""
+        if not self.ptz or not self.profile:
+            print("ONVIF PTZ service not available")
+            return
+
+        # target_level = self.est_zoom_level + zoom_change
+        # target_level = min(max(target_level, MIN_ZOOM_LEVEL), MAX_ZOOM_LEVEL)
+        # actual_change = target_level - self.est_zoom_level
+        sleep_time = abs(zoom_change) / zoom_speed_levelps
+
+        def zoom_thread():
+            if zoom_change > 0:
+                print(f'    {ZOOM_COLOR}ZOOM IN by {round(zoom_change, 2)}...{RESET_COLOR} ({round(sleep_time, 2)} s)')
+                self.zoom_speed(1)
+            elif zoom_change < 0:
+                print(f'    {ZOOM_COLOR}ZOOM OUT by {round(-zoom_change, 2)}...{RESET_COLOR} ({round(sleep_time, 2)} s)')
+                self.zoom_speed(-1)
+            time.sleep(sleep_time)
+            self.stop_ptz()
+
+        t = threading.Thread(target=zoom_thread, daemon=True)
+        t.start()
+        if blocking:
+            t.join()
+        self.print_position()
+
+    def abs_zoom(self, level, blocking=True):
+        """Move to absolute zoom level between 0 (widest) and 1 (closest)"""
+        if not self.ptz or not self.profile:
+            print("ONVIF PTZ service not available")
+            return
+
+        if level < MIN_ZOOM_LEVEL or level > MAX_ZOOM_LEVEL:
+            print(f"Zoom level {level} out of range [{MIN_ZOOM_LEVEL}, {MAX_ZOOM_LEVEL}]")
+            return
+
+        zoom_change = level - self.est_zoom_level
+        self.rel_zoom(zoom_change, blocking=blocking)
+        self.est_zoom_level = level
+
     def abs_pantilt(self, pan_tilt, blocking=True):
+        # pantilt must be done while zoom is at 0
+        prev_zoom_level= self.est_zoom_level
+        self.abs_zoom(0, blocking=blocking)
         pan, tilt = pan_tilt
         if pan < tilt:
             self.abs_pan(pan, blocking=blocking)
@@ -172,6 +209,7 @@ class PTZCommands:
         else:
             self.abs_tilt(tilt, blocking=blocking)
             self.abs_pan(pan, blocking=blocking)
+        self.abs_zoom(prev_zoom_level, blocking=blocking)
     
     def go_home(self):
         

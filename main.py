@@ -21,9 +21,10 @@ CAMERA_URL = f"rtsp://admin:{pw}@192.168.1.139:554/12"
 # Initialize PTZ commands (will be set up in startup event)
 ptz_control = None
 
-class PanTiltRequest(BaseModel):
+class PTZRequest(BaseModel):
     pan: float
     tilt: float
+    zoom: float | None = None  # Optional zoom parameter
 
 @app.on_event("startup")
 async def startup_event():
@@ -73,7 +74,7 @@ async def startup_event():
 
 @app.get("/move")
 @app.post("/move")
-async def move_camera(pan: float = None, tilt: float = None, request: PanTiltRequest = None):
+async def move_camera(pan: float = None, tilt: float = None, zoom: float = None, request: PTZRequest = None):
     if not ptz_control:
         raise HTTPException(status_code=503, detail="PTZ control not available")
     
@@ -81,6 +82,7 @@ async def move_camera(pan: float = None, tilt: float = None, request: PanTiltReq
         # Get values either from query params (GET) or request body (POST)
         pan_value = pan if pan is not None else (request.pan if request else None)
         tilt_value = tilt if tilt is not None else (request.tilt if request else None)
+        zoom_value = zoom if zoom is not None else (request.zoom if request else None)
         
         if pan_value is None or tilt_value is None:
             raise HTTPException(status_code=400, detail="Pan and tilt values are required")
@@ -88,23 +90,35 @@ async def move_camera(pan: float = None, tilt: float = None, request: PanTiltReq
         # Calculate absolute position based on current position plus relative movement
         new_pan = ptz_control.est_pan_angle_deg + pan_value
         new_tilt = ptz_control.est_tilt_angle_deg + tilt_value
+        new_zoom = ptz_control.est_zoom_level + zoom_value if zoom_value is not None else ptz_control.est_zoom_level
         
         # First stop any ongoing movement
         ptz_control.stop_ptz()
         time.sleep(0.5)  # Small delay to ensure stop is processed
         
         # Move to requested position using absolute positioning
-        if abs(new_pan) <= 350 and abs(new_tilt) <= 90:  # Check if within limits
+        if (abs(new_pan) <= 350 and abs(new_tilt) <= 90 and 
+            (new_zoom is None or (0 <= new_zoom <= 1))):  # Check if within limits
+            
+            # Move pan/tilt first
             ptz_control.abs_pantilt((new_pan, new_tilt))
+            
+            # Then move zoom if specified
+            if zoom_value is not None:
+                ptz_control.abs_zoom(new_zoom)
+            
             return {
-                "message": f"Moving relative pan: {pan_value}, tilt: {tilt_value}",
+                "message": f"Moving relative pan: {pan_value}, tilt: {tilt_value}" + 
+                          (f", zoom: {zoom_value}" if zoom_value is not None else ""),
                 "target_position": {
                     "pan": new_pan,
-                    "tilt": new_tilt
+                    "tilt": new_tilt,
+                    "zoom": new_zoom
                 },
                 "current_position": {
                     "pan": ptz_control.est_pan_angle_deg,
-                    "tilt": ptz_control.est_tilt_angle_deg
+                    "tilt": ptz_control.est_tilt_angle_deg,
+                    "zoom": ptz_control.est_zoom_level
                 }
             }
         else:
@@ -159,7 +173,8 @@ async def move_to_origin():
             "message": "Moved to hard origin position",
             "current_position": {
                 "pan": ptz_control.est_pan_angle_deg,
-                "tilt": ptz_control.est_tilt_angle_deg
+                "tilt": ptz_control.est_tilt_angle_deg,
+                "zoom": ptz_control.est_zoom_level
             }
         }
     except Exception as e:
