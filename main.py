@@ -31,26 +31,30 @@ class PTZRequest(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     global ptz_control
-    print(f"Pinging camera at {CAMERA_URL}...")
-    # ping CAMERA_URL to check if it's reachable, with timeout
-    ping=subprocess.run(["ping", "-n", "1", "-w", "2000", CAMERA_IP], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if ping.returncode != 0:
-        raise HTTPException(status_code=503, detail="Camera is not reachable")
+    try:
 
-    # Initialize your PTZ control here
-    from onvif import ONVIFCamera
-    print("Connecting to camera...")
+        # Initialize your PTZ control here
+        from onvif import ONVIFCamera
+        print("Connecting to camera...")
+        
+        # Get camera IP from RTSP URL
+        from urllib.parse import urlparse
+        camera_url = urlparse(CAMERA_URL)
+        camera_ip = camera_url.hostname
+        
+        # Create ONVIFCamera instance (simpler initialization like in CameraGUI)
+        # cam = ONVIFCamera(camera_ip, 80, 'admin', pw)
+        wsdl_dir=os.path.join('C:\\', 'Users', 'Hugo', 'AppData', 'Roaming', 'Python', 'Lib', 'site-packages', 'wsdl')
+        cam = ONVIFCamera('192.168.1.139', 8080, 'admin', pw, wsdl_dir='wsdl')
+        print("Camera connection established")
     
-    # Get camera IP from RTSP URL
-    from urllib.parse import urlparse
-    camera_url = urlparse(CAMERA_URL)
-    camera_ip = camera_url.hostname
-    
-    # Create ONVIFCamera instance (simpler initialization like in CameraGUI)
-    # cam = ONVIFCamera(camera_ip, 80, 'admin', pw)
-    wsdl_dir=os.path.join('C:\\', 'Users', 'Hugo', 'AppData', 'Roaming', 'Python', 'Lib', 'site-packages', 'wsdl')
-    cam = ONVIFCamera('192.168.1.139', 8080, 'admin', pw, wsdl_dir='wsdl')
-    print("Camera connection established")
+    except:
+        print(f"Failed to connect to camera usinf ONVIF. Pinging {CAMERA_IP}...")
+        # ping CAMERA_URL to check if it's reachable, with timeout
+        ping=subprocess.run(["ping", "-n", "1", "-w", "2000", CAMERA_IP], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if ping.returncode != 0:
+            raise HTTPException(status_code=503, detail="Camera is not reachable")
+        raise HTTPException(status_code=500, detail="Failed to connect to camera, although it is reachable")
     
     # Create media service object
     print("Creating media service...")
