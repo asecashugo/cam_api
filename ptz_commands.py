@@ -1,26 +1,26 @@
 import time
 import threading
 
-MAX_TILT_TIME_S=4.5
+MAX_TILT_TIME_S=6
 MAX_TILT_ANGLE=0
 MIN_TILT_ANGLE=-90
 
-MAX_PAN_TIME_S=20
+MAX_PAN_TIME_S=29
 MAX_PAN_ANGLE=350
 MIN_PAN_ANGLE=0
 
 pan_speed_degps=(MAX_PAN_ANGLE - MIN_PAN_ANGLE) / MAX_PAN_TIME_S
 tilt_speed_degps=(MAX_TILT_ANGLE - MIN_TILT_ANGLE) / MAX_TILT_TIME_S
 
-ORIGIN_PAN_OFFSET_TO_NORTH_DEG=45
+ORIGIN_PAN_OFFSET_TO_NORTH_DEG=0
 
 class PTZCommands:
     def __init__(self, ptz, profile, pt_speed=0.2):
         self.ptz = ptz
         self.profile = profile
         self.pt_speed = pt_speed
-        self.est_pan_angle_deg = 0
-        self.est_tilt_angle_deg = 0
+        self.est_pan_angle_deg = MIN_PAN_ANGLE + ORIGIN_PAN_OFFSET_TO_NORTH_DEG
+        self.est_tilt_angle_deg = MIN_TILT_ANGLE
         self.est_zoom_level = 0
     
     
@@ -108,7 +108,7 @@ class PTZCommands:
         self.est_pan_angle_deg = MIN_PAN_ANGLE+ORIGIN_PAN_OFFSET_TO_NORTH_DEG
         self.est_tilt_angle_deg = MIN_TILT_ANGLE
 
-    def rel_pan(self, angle_deg, blocking=False):
+    def rel_pan(self, angle_deg, blocking=True):
         def pan_thread():
             sleep_time = abs(angle_deg) / pan_speed_degps
             if angle_deg > 0:
@@ -126,7 +126,7 @@ class PTZCommands:
         if blocking:
             t.join()
 
-    def rel_tilt(self, angle_deg, blocking=False):
+    def rel_tilt(self, angle_deg, blocking=True):
         def tilt_thread():
             sleep_time = abs(angle_deg) / tilt_speed_degps
             if angle_deg > 0:
@@ -153,6 +153,7 @@ class PTZCommands:
         self.est_tilt_angle_deg = angle_deg
 
     def abs_pantilt(self, pan_tilt, blocking=True):
+        print(f"ℹ️ abs pantilt to {pan_tilt[0]}deg ({pan_tilt[0]-self.est_pan_angle_deg} deg), {pan_tilt[1]}deg ({pan_tilt[1]-self.est_tilt_angle_deg} deg)")
         pan, tilt = pan_tilt
         self.abs_pan(pan, blocking=blocking)
         self.abs_tilt(tilt, blocking=blocking)
@@ -160,7 +161,6 @@ class PTZCommands:
     
     def go_home(self):
         
-        HOME_PAN_ANGLE_DEG=225
-        HOME_TILT_ANGLE_DEG=0
-        self.abs_pan(HOME_PAN_ANGLE_DEG)
-        self.abs_tilt(HOME_TILT_ANGLE_DEG)
+        HOME_PAN_ANGLE_DEG=180
+        HOME_TILT_ANGLE_DEG=-30
+        self.abs_pantilt((HOME_PAN_ANGLE_DEG, HOME_TILT_ANGLE_DEG))
