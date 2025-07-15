@@ -1,3 +1,4 @@
+source venv/bin/activate
 pip install -r requirements.txt
 apt update
 apt install libgl1
