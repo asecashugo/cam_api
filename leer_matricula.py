@@ -1,5 +1,6 @@
 import cv2
 import easyocr
+import json
 import os
 import dynamodb
 import cap_mgr
@@ -8,6 +9,12 @@ from roi_utils import show_plate_roi
 from plate_format import extract_plate
 from camera_gui import start_gui
 from onvif import ONVIFCamera
+
+# Read environment configuration
+with open("environ.json", "r") as f:
+    environ = json.load(f)
+pw = environ.get("pw", "admin")
+cam_ip = environ.get("camera_ip", "192.168.1.161")
 
 def main():
     cascade_path = "haarcascade_russian_plate_number.xml"
@@ -22,7 +29,7 @@ def main():
         environ = json.load(f)
     pw = environ.get("pw", "admin")
     wsdl_dir=os.path.join('C:\\', 'Users', 'Hugo', 'AppData', 'Roaming', 'Python', 'Lib', 'site-packages', 'wsdl')
-    onvif_camera = ONVIFCamera('192.168.1.139', 8080, 'admin', pw, wsdl_dir=wsdl_dir)
+    onvif_camera = ONVIFCamera(cam_ip, 8080, 'admin', pw, wsdl_dir=wsdl_dir)
     print(f"ONVIF Camera initialized: {onvif_camera.devicemgmt.GetDeviceInformation()}")
     cap = cap_mgr.get_cap('rtsp')
     os.makedirs('output', exist_ok=True)

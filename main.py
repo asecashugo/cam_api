@@ -15,9 +15,10 @@ app = FastAPI(title="Camera Control API")
 with open("environ.json", "r") as f:
     environ = json.load(f)
 pw = environ.get("pw", "admin")
+cam_ip= environ.get("camera_ip", "192.168.1.161")
 
 # Initialize camera URL
-CAMERA_IP = '192.168.1.139'
+CAMERA_IP = cam_ip
 CAMERA_URL = f"rtsp://admin:{pw}@{CAMERA_IP}:554/12"
 
 # Initialize PTZ commands (will be set up in startup event)
@@ -45,7 +46,7 @@ async def startup_event():
         # Create ONVIFCamera instance (simpler initialization like in CameraGUI)
         # cam = ONVIFCamera(camera_ip, 80, 'admin', pw)
         wsdl_dir=os.path.join('C:\\', 'Users', 'Hugo', 'AppData', 'Roaming', 'Python', 'Lib', 'site-packages', 'wsdl')
-        cam = ONVIFCamera('192.168.1.139', 8080, 'admin', pw, wsdl_dir='wsdl')
+        cam = ONVIFCamera(cam_ip, 8080, 'admin', pw, wsdl_dir='wsdl')
         print("Camera connection established")
     
     except:
