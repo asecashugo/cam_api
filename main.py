@@ -36,7 +36,7 @@ async def startup_event():
 
         # Initialize your PTZ control here
         from onvif import ONVIFCamera
-        print("Connecting to camera...")
+        print(f"Connecting to camera at {CAMERA_IP}...")
         
         # Get camera IP from RTSP URL
         from urllib.parse import urlparse
