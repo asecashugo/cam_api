@@ -15,7 +15,8 @@ app = FastAPI(title="Camera Control API")
 with open("environ.json", "r") as f:
     environ = json.load(f)
 pw = environ.get("pw", "admin")
-cam_ip= environ.get("camera_ip", "192.168.1.161")
+cam_ip = environ.get("camera_ip", "192.168.1.161")
+PICTURES_PATH = environ.get("pictures_path", "/config/pictures/cam_api")
 
 # Initialize camera URL
 CAMERA_IP = cam_ip
@@ -191,11 +192,11 @@ async def take_picture(suffix: str = ""):
             raise HTTPException(status_code=500, detail="Could not capture image")
         
         # Create output directory if it doesn't exist
-        os.makedirs("output/pictures", exist_ok=True)
+        os.makedirs(PICTURES_PATH, exist_ok=True)
         
         # Generate filename with timestamp and suffix
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"output/pictures/{timestamp}_{suffix}_api.jpg"
+        filename = f"{PICTURES_PATH}/{timestamp}_{suffix}_api.jpg"
         
         # Save the image
         cv2.imwrite(filename, frame)
@@ -362,11 +363,11 @@ async def take_picture_at_location(location: str):
             raise HTTPException(status_code=500, detail="Could not capture image")
         
         # Create output directory if it doesn't exist
-        os.makedirs("output/pictures", exist_ok=True)
+        os.makedirs(PICTURES_PATH, exist_ok=True)
         
         # Generate filename with timestamp and location name
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"output/pictures/{timestamp}_{location}.jpg"
+        filename = f"{PICTURES_PATH}/{timestamp}_{location}.jpg"
         
         # Save the image
         cv2.imwrite(filename, frame)
