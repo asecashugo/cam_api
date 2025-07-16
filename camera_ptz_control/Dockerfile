@@ -17,8 +17,8 @@ WORKDIR /app
 COPY . .
 
 # Install Python dependencies
-RUN pip3 install --no-cache-dir --upgrade 'packaging>=24.0' && \
-    pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip3 install --no-cache-dir --ignore-installed "packaging>=24.0" && \
     pip3 install --no-cache-dir opencv-python-headless==4.5.5.64 && \
     pip3 install --no-cache-dir -r requirements.txt
 
