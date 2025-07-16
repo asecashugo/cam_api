@@ -17,7 +17,8 @@ WORKDIR /app
 COPY . .
 
 # Install Python dependencies
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --upgrade pip setuptools wheel && \
+    pip3 install --no-cache-dir -r requirements.txt
 
 # Make scripts executable
 RUN chmod a+x /app/run.sh
