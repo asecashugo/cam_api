@@ -197,6 +197,8 @@ async def take_picture(suffix: str = ""):
         # Generate filename with timestamp and suffix
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{PICTURES_PATH}/{timestamp}_{suffix}_api.jpg"
+
+        print(f"Saving picture to {filename}")
         
         # Save the image
         cv2.imwrite(filename, frame)
