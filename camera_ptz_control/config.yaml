@@ -1,5 +1,5 @@
 name: "Camera PTZ Control"
-version: "1.0.9"
+version: "1.0.10"
 slug: "camera_ptz_control"
 description: "Control PTZ camera movements and take pictures via API"
 url: "https://github.com/asecashugo/plate_cv"
@@ -12,7 +12,7 @@ arch:
 startup: application
 boot: auto
 ports:
-  8000/tcp: 8000
+  8001/tcp: 8001
 init: false
 host_network: true
 ingress: true

@@ -22,7 +22,7 @@ password: ""                 # Your camera's password (set securely through the 
 
 ## API Documentation
 
-The API will be available at `http://your-homeassistant:8000` with the following endpoints:
+The API will be available at `http://your-homeassistant:8001` with the following endpoints:
 
 - `/move`: Control PTZ movements
 - `/capture`: Take pictures
@@ -31,4 +31,4 @@ The API will be available at `http://your-homeassistant:8000` with the following
 - `/origin`: Move to origin position
 - `/home`: Move to home position
 
-For detailed API documentation, visit the Swagger UI at `http://your-homeassistant:8000/docs`
+For detailed API documentation, visit the Swagger UI at `http://your-homeassistant:8001/docs`
