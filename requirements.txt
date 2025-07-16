@@ -1,4 +1,5 @@
-fastapi
-uvicorn
-opencv-python
-onvif-zeep
+fastapi>=0.68.0,<0.69.0
+uvicorn>=0.15.0,<0.16.0
+opencv-python-headless>=4.5.3.56
+onvif-zeep>=0.2.12
+pydantic>=1.8.0,<2.0.0
