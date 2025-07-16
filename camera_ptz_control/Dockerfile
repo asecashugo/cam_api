@@ -1,4 +1,4 @@
-ARG BUILD_FROM
+ARG BUILD_FROM=ghcr.io/home-assistant/aarch64-base:3.16
 FROM $BUILD_FROM
 
 # Install required packages
@@ -18,6 +18,7 @@ COPY . .
 
 # Install Python dependencies
 RUN pip3 install --upgrade pip setuptools wheel && \
+    pip3 install opencv-python-headless==4.5.5.64 && \
     pip3 install --no-cache-dir -r requirements.txt
 
 # Make scripts executable
