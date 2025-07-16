@@ -1,5 +1,5 @@
 name: "Camera PTZ Control"
-version: "1.0.2"
+version: "1.0.3"
 slug: "camera_ptz_control"
 description: "Control PTZ camera movements and take pictures via API"
 url: "https://github.com/asecashugo/plate_cv"
