@@ -7,19 +7,25 @@ RUN \
         python3 \
         py3-pip \
         opencv \
+        opencv-dev \
+        python3-opencv \
         gcc \
         python3-dev \
         musl-dev \
-        linux-headers
+        linux-headers \
+        cmake \
+        make \
+        g++
 
 # Copy your application files
 WORKDIR /app
 COPY . .
 
 # Install Python dependencies
-RUN pip3 install --no-cache-dir --ignore-installed packaging==25.0 && \
+COPY requirements.txt .
+RUN sed -i '/opencv-python-headless/d' requirements.txt && \
+    pip3 install --no-cache-dir --ignore-installed packaging==25.0 && \
     pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip3 install --no-cache-dir opencv-python-headless==4.5.5.64 && \
     pip3 install --no-cache-dir -r requirements.txt
 
 # Make scripts executable
