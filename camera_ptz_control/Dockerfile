@@ -20,6 +20,11 @@ RUN \
 WORKDIR /app
 COPY . .
 
+# Ensure WSDL directory is in the correct location and has proper permissions
+RUN mkdir -p /app/wsdl && \
+    mv wsdl/* /app/wsdl/ && \
+    chmod -R 755 /app/wsdl
+
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir --ignore-installed packaging==25.0 && \

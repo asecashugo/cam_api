@@ -45,17 +45,29 @@ async def startup_event():
         
         # Create ONVIFCamera instance (simpler initialization like in CameraGUI)
         # cam = ONVIFCamera(camera_ip, 80, 'admin', pw)
-        wsdl_dir=os.path.join('C:\\', 'Users', 'Hugo', 'AppData', 'Roaming', 'Python', 'Lib', 'site-packages', 'wsdl')
-        cam = ONVIFCamera(cam_ip, 8080, 'admin', pw, wsdl_dir='wsdl')
+        wsdl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wsdl')
+        if not os.path.exists(wsdl_path):
+            print(f"WSDL directory not found at {wsdl_path}")
+            raise Exception("WSDL directory not found")
+            
+        print(f"Using WSDL directory: {wsdl_path}")
+        cam = ONVIFCamera(cam_ip, 8080, 'admin', pw, wsdl_dir=wsdl_path)
         print("Camera connection established")
     
-    except:
-        print(f"Failed to connect to camera usinf ONVIF. Pinging {CAMERA_IP}...")
-        # ping CAMERA_URL to check if it's reachable, with timeout
-        ping=subprocess.run(["ping", "-n", "1", "-w", "2000", CAMERA_IP], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        print(f"Failed to connect to camera using ONVIF: {str(e)}")
+        print(f"Pinging {CAMERA_IP}...")
+        
+        # Use ping command compatible with both Windows and Linux
+        if os.name == 'nt':  # Windows
+            ping_cmd = ["ping", "-n", "1", "-w", "2000", CAMERA_IP]
+        else:  # Linux/Unix
+            ping_cmd = ["ping", "-c", "1", "-W", "2", CAMERA_IP]
+            
+        ping = subprocess.run(ping_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if ping.returncode != 0:
             raise HTTPException(status_code=503, detail="Camera is not reachable")
-        raise HTTPException(status_code=500, detail="Failed to connect to camera, although it is reachable")
+        raise HTTPException(status_code=500, detail=f"Failed to connect to camera, although it is reachable. Error: {str(e)}")
     
     # Create media service object
     print("Creating media service...")
