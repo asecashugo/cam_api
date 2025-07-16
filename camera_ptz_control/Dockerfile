@@ -20,10 +20,8 @@ RUN \
 WORKDIR /app
 COPY . .
 
-# Ensure WSDL directory is in the correct location and has proper permissions
-RUN mkdir -p /app/wsdl && \
-    mv wsdl/* /app/wsdl/ && \
-    chmod -R 755 /app/wsdl
+# Ensure WSDL directory has proper permissions
+RUN chmod -R 755 /app/wsdl
 
 # Install Python dependencies
 COPY requirements.txt .

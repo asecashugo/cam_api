@@ -45,10 +45,29 @@ async def startup_event():
         
         # Create ONVIFCamera instance (simpler initialization like in CameraGUI)
         # cam = ONVIFCamera(camera_ip, 80, 'admin', pw)
-        wsdl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wsdl')
-        if not os.path.exists(wsdl_path):
-            print(f"WSDL directory not found at {wsdl_path}")
-            raise Exception("WSDL directory not found")
+        # Try multiple possible WSDL paths
+        possible_wsdl_paths = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wsdl'),
+            '/app/wsdl',
+            'wsdl'
+        ]
+        
+        wsdl_path = None
+        for path in possible_wsdl_paths:
+            print(f"Checking WSDL path: {path}")
+            if os.path.exists(path):
+                print(f"Found WSDL directory at: {path}")
+                # Verify that devicemgmt.wsdl exists
+                if os.path.exists(os.path.join(path, 'devicemgmt.wsdl')):
+                    wsdl_path = path
+                    break
+                else:
+                    print(f"devicemgmt.wsdl not found in {path}")
+            else:
+                print(f"Directory not found: {path}")
+                
+        if wsdl_path is None:
+            raise Exception("WSDL directory with required files not found in any of the expected locations")
             
         print(f"Using WSDL directory: {wsdl_path}")
         cam = ONVIFCamera(cam_ip, 8080, 'admin', pw, wsdl_dir=wsdl_path)
