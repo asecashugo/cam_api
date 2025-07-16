@@ -20,6 +20,10 @@ RUN \
 WORKDIR /app
 COPY . .
 
+# Create and set permissions for pictures directory
+RUN mkdir -p /config/pictures/cam_api && \
+    chmod -R 777 /config/pictures/cam_api
+
 # Ensure WSDL directory has proper permissions
 RUN chmod -R 755 /app/wsdl
 

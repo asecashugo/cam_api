@@ -1,5 +1,5 @@
 name: "Camera PTZ Control"
-version: "1.0.8"
+version: "1.0.9"
 slug: "camera_ptz_control"
 description: "Control PTZ camera movements and take pictures via API"
 url: "https://github.com/asecashugo/plate_cv"
@@ -14,10 +14,17 @@ boot: auto
 ports:
   8000/tcp: 8000
 init: false
+host_network: true
+ingress: true
+panel_icon: "mdi:camera-control"
+map:
+  - config:rw
 options:
   camera_ip: "192.168.1.139"
+  pictures_path: "/config/pictures/cam_api"
 schema:
   camera_ip: str
+  pictures_path: str
   password: password?
 advanced: true
 stage: experimental
