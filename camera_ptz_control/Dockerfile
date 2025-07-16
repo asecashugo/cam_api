@@ -7,8 +7,7 @@ RUN \
         python3 \
         py3-pip \
         opencv \
-        opencv-dev \
-        python3-opencv \
+        py3-opencv \
         gcc \
         python3-dev \
         musl-dev \
@@ -23,8 +22,7 @@ COPY . .
 
 # Install Python dependencies
 COPY requirements.txt .
-RUN sed -i '/opencv-python-headless/d' requirements.txt && \
-    pip3 install --no-cache-dir --ignore-installed packaging==25.0 && \
+RUN pip3 install --no-cache-dir --ignore-installed packaging==25.0 && \
     pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
     pip3 install --no-cache-dir -r requirements.txt
 
