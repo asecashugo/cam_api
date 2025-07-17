@@ -15,7 +15,7 @@ app = FastAPI(title="Camera Control API")
 with open("environ.json", "r") as f:
     environ = json.load(f)
 pw = environ.get("pw", "admin")
-cam_ip = environ.get("camera_ip", "192.168.1.161")
+cam_ip = environ.get("camera_ip", "192.168.1.139")
 PICTURES_PATH = environ.get("pictures_path", "/config/pictures/cam_api")
 
 # Initialize camera URL
