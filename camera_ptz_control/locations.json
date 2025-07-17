@@ -18,5 +18,30 @@
         "pan": 130.0,
         "tilt": -35.0,
         "zoom": 0.2
+    },
+    "cruce": {
+        "pan": 10.0,
+        "tilt": -20.0,
+        "zoom": 0.0
+    },
+    "skyline": {
+        "pan": 10.0,
+        "tilt": -20.0,
+        "zoom": 0.0
+    },
+    "torres_venecianas": {
+        "pan": 40.0,
+        "tilt": -5.0,
+        "zoom": 1.0
+    },
+    "naranjo": {
+        "pan": 150.0,
+        "tilt": -90,
+        "zoom": 0.0
+    },
+    "joanot": {
+        "pan": 240.0,
+        "tilt": -30.0,
+        "zoom": 0.0
     }
 }
