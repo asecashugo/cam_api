@@ -185,8 +185,8 @@ async def take_picture(suffix: str = ""):
     
     try:
         # Hard origin before taking picture
-        print("Moving to hard origin before taking picture...")
-        ptz_control.hard_origin(blocking=True)
+        # print("Moving to hard origin before taking picture...")
+        # ptz_control.hard_origin(blocking=True)
         time.sleep(0.5)  # Small delay to ensure camera has stopped moving
         
         # Initialize capture
