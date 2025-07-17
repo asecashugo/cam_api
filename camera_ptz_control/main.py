@@ -214,9 +214,9 @@ async def take_picture(suffix: str = ""):
         # Release the capture
         cap.release()
         
-        # Hard origin after taking picture
-        print("Moving to hard origin after taking picture...")
-        ptz_control.hard_origin(blocking=True)
+        # # Hard origin after taking picture
+        # print("Moving to hard origin after taking picture...")
+        # ptz_control.hard_origin(blocking=True)
         
         return {"message": "Picture captured", "filename": filename}
         
@@ -349,10 +349,10 @@ async def take_picture_at_location(location: str):
         raise HTTPException(status_code=503, detail="PTZ control not available")
     
     try:
-        # Hard origin before taking picture
-        print("Moving to hard origin before taking picture...")
-        ptz_control.hard_origin(blocking=True)
-        time.sleep(0.5)  # Small delay to ensure camera has stopped moving
+        # # Hard origin before taking picture
+        # print("Moving to hard origin before taking picture...")
+        # ptz_control.hard_origin(blocking=True)
+        # time.sleep(0.5)  # Small delay to ensure camera has stopped moving
         
         # First, move to the location
         location = location.lower()  # case-insensitive matching
@@ -394,9 +394,9 @@ async def take_picture_at_location(location: str):
         # Release the capture
         cap.release()
         
-        # Hard origin after taking picture
-        print("Moving to hard origin after taking picture...")
-        ptz_control.hard_origin(blocking=True)
+        # # Hard origin after taking picture
+        # print("Moving to hard origin after taking picture...")
+        # ptz_control.hard_origin(blocking=True)
         
         return {
             "message": f"Moved to location '{location}' and took picture",
