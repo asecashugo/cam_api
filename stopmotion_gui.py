@@ -407,22 +407,25 @@ class StopmotionGUI:
             selected_count = until_idx - since_idx + 1
             
             # Open Windows Explorer to the output folder
-            output_path = "Z:/videos/stopmotion"
+            output_path = "Z:\\videos\\stopmotion"
+            # Ensure the directory exists
+            os.makedirs(output_path, exist_ok=True)
+            
             try:
+                # Use Windows path format and ensure it opens the correct folder
                 subprocess.run(['explorer', output_path], check=True)
             except subprocess.CalledProcessError:
-                # Fallback if the path doesn't exist or explorer fails
-                subprocess.run(['explorer', '/select,', output_path], shell=True)
+                try:
+                    # Alternative method using /root flag
+                    subprocess.run(['explorer', '/root,', output_path], check=True)
+                except subprocess.CalledProcessError:
+                    # Final fallback - open parent directory
+                    parent_path = "Z:\\videos"
+                    os.makedirs(parent_path, exist_ok=True)
+                    subprocess.run(['explorer', parent_path], check=True)
             except Exception:
                 pass  # Ignore explorer errors, don't let them break the success message
             
-            messagebox.showinfo("Success", 
-                              f"Video created successfully!\n"
-                              f"Location: {location}\n"
-                              f"Pictures: {selected_count} selected\n"
-                              f"From: {self.current_location_timestamps[since_idx].strftime('%Y-%m-%d %H:%M:%S')}\n"
-                              f"To: {self.current_location_timestamps[until_idx].strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                              f"Output folder opened in Explorer.")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to create video: {str(e)}")
 if __name__ == "__main__":
