@@ -369,7 +369,7 @@ async def take_picture_at_location(location: str):
         ptz_control.abs_zoom(preset["zoom"])
         
         # Small delay to ensure camera has stopped moving
-        time.sleep(1)
+        time.sleep(0.5)
         
         # Now take the picture
         cap = cv2.VideoCapture(CAMERA_URL)
