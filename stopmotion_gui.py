@@ -27,6 +27,7 @@ summary_df = df.groupby('location').agg(
 ).reset_index()
 
 import cv2
+import numpy as np
 from datetime import datetime
 
 def filter_by_location_and_time(df: pd.DataFrame, location: str, since: datetime, until: datetime) -> pd.DataFrame:
@@ -42,8 +43,108 @@ def filter_by_location_and_time(df: pd.DataFrame, location: str, since: datetime
     filtered_df = df[(df['location'] == location) & (df['timestamp'] >= since) & (df['timestamp'] <= until)]
     return filtered_df.sort_values('timestamp')
 
-def create_stopmotion_video(df:pd.DataFrame, location:str, since:datetime, until:datetime, fps=30):
-    OUTPUT_PATH= "Z:/videos/stopmotion"
+def find_typical_frame(selected_df, sample_size=10):
+    """
+    Find a typical frame by analyzing feature matches across multiple images.
+    Returns the index of the image that has the most matches with other images.
+    """
+    total_images = len(selected_df)
+    if total_images <= 1:
+        return 0
+    
+    # Sample a subset of images for efficiency
+    step = max(1, total_images // sample_size)
+    sample_indices = list(range(0, total_images, step))
+    
+    orb = cv2.ORB_create(500)
+    matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    
+    best_score = 0
+    best_idx = 0
+    
+    for i in sample_indices:
+        img_path = selected_df.iloc[i]['path']
+        img = cv2.imread(img_path)
+        if img is None:
+            continue
+            
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        kp, des = orb.detectAndCompute(gray, None)
+        
+        if des is None:
+            continue
+            
+        total_matches = 0
+        for j in sample_indices:
+            if i == j:
+                continue
+                
+            other_img_path = selected_df.iloc[j]['path']
+            other_img = cv2.imread(other_img_path)
+            if other_img is None:
+                continue
+                
+            other_gray = cv2.cvtColor(other_img, cv2.COLOR_BGR2GRAY)
+            other_kp, other_des = orb.detectAndCompute(other_gray, None)
+            
+            if other_des is None:
+                continue
+                
+            matches = matcher.match(des, other_des)
+            total_matches += len(matches)
+        
+        if total_matches > best_score:
+            best_score = total_matches
+            best_idx = i
+    
+    print(f"Selected frame {best_idx + 1} as reference (best match score: {best_score})")
+    return best_idx
+
+def validate_transformation(M, width, height, max_rotation=10, max_translation_pct=10, max_scale_change=10):
+    """
+    Validate if the transformation matrix is within acceptable limits.
+    
+    Args:
+        M: 2x3 affine transformation matrix
+        width, height: image dimensions
+        max_rotation: maximum rotation in degrees
+        max_translation_pct: maximum translation as percentage of image width
+        max_scale_change: maximum scale change as percentage
+    
+    Returns:
+        bool: True if transformation is valid, False otherwise
+    """
+    if M is None:
+        return False
+    
+    # Extract rotation angle
+    rotation_rad = np.arctan2(M[1, 0], M[0, 0])
+    rotation_deg = np.abs(np.degrees(rotation_rad))
+    
+    # Extract scale
+    scale_x = np.sqrt(M[0, 0]**2 + M[1, 0]**2)
+    scale_y = np.sqrt(M[0, 1]**2 + M[1, 1]**2)
+    scale_change_x = abs(scale_x - 1.0) * 100
+    scale_change_y = abs(scale_y - 1.0) * 100
+    
+    # Extract translation
+    translation_x = abs(M[0, 2])
+    translation_y = abs(M[1, 2])
+    translation_pct_x = (translation_x / width) * 100
+    translation_pct_y = (translation_y / height) * 100
+    
+    # Check limits
+    if rotation_deg > max_rotation:
+        return False
+    if scale_change_x > max_scale_change or scale_change_y > max_scale_change:
+        return False
+    if translation_pct_x > max_translation_pct or translation_pct_y > max_translation_pct:
+        return False
+    
+    return True
+
+def create_stopmotion_video(df: pd.DataFrame, location: str, since: datetime, until: datetime, fps=30, progress_callback=None):
+    OUTPUT_PATH = "Z:/videos/stopmotion"
     os.makedirs(OUTPUT_PATH, exist_ok=True)
 
     selected_df = filter_by_location_and_time(df, location, since, until)
@@ -51,23 +152,105 @@ def create_stopmotion_video(df:pd.DataFrame, location:str, since:datetime, until
         print(f"No images found for location '{location}' between {since} and {until}.")
         return
     
-    # Ensure the DataFrame is sorted by timestamp (redundant safety check)
-    selected_df = selected_df.sort_values('timestamp')
+    # Reset index to ensure proper indexing
+    selected_df = selected_df.sort_values('timestamp').reset_index(drop=True)
+    total_images = len(selected_df)
     
-    first_img_path = selected_df.iloc[0]['path']
-    first_img = cv2.imread(first_img_path)
-    height, width = first_img.shape[:2]
+    if progress_callback:
+        progress_callback("Finding optimal reference frame...", 0, total_images)
+    
+    # Find the most typical frame as reference
+    ref_idx = find_typical_frame(selected_df)
+    ref_img_path = selected_df.iloc[ref_idx]['path']
+    ref_img = cv2.imread(ref_img_path)
+    
+    if ref_img is None:
+        print(f"Error: Could not read reference image {ref_img_path}")
+        return
+        
+    height, width = ref_img.shape[:2]
+    gray_ref = cv2.cvtColor(ref_img, cv2.COLOR_BGR2GRAY)
+    
+    # Feature detector for image alignment
+    orb = cv2.ORB_create(500)
+    
+    # Detect keypoints and descriptors in reference image
+    kp_ref, des_ref = orb.detectAndCompute(gray_ref, None)
+    
+    if des_ref is None:
+        print("Warning: No features detected in reference image. Proceeding without alignment.")
+        use_alignment = False
+    else:
+        use_alignment = True
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(os.path.join(OUTPUT_PATH, f"{location}_{since.strftime('%Y%m%d_%H%M%S')}_{until.strftime('%Y%m%d_%H%M%S')}.mp4"), fourcc, fps, (width, height))
+    video_path = os.path.join(OUTPUT_PATH, f"{location}_{since.strftime('%Y%m%d_%H%M%S')}_{until.strftime('%Y%m%d_%H%M%S')}.mp4")
+    out = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
 
-    for _, row in selected_df.iterrows():
+    processed_count = 0
+    aligned_count = 0
+    skipped_count = 0
+    
+    for i, (_, row) in enumerate(selected_df.iterrows()):
+        if progress_callback:
+            progress_callback(f"Processing image {i+1}/{total_images}...", i, total_images)
+        
         img = cv2.imread(row['path'])
         if img is not None:
-            out.write(img)
+            aligned_img = img
+            
+            if use_alignment and i != ref_idx:  # Skip alignment for reference image
+                try:
+                    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    kp, des = orb.detectAndCompute(gray_img, None)
+                    
+                    if des is not None:
+                        matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+                        matches = matcher.match(des, des_ref)
+                        matches = sorted(matches, key=lambda x: x.distance)
+                        
+                        if len(matches) > 15:  # Increased minimum matches for better reliability
+                            src_pts = np.float32([kp[m.queryIdx].pt for m in matches]).reshape(-1,1,2)
+                            dst_pts = np.float32([kp_ref[m.trainIdx].pt for m in matches]).reshape(-1,1,2)
+                            
+                            # Use affine transformation for alignment
+                            M, _ = cv2.estimateAffinePartial2D(src_pts, dst_pts)
+                            
+                            # Validate transformation limits
+                            if validate_transformation(M, width, height):
+                                aligned_img = cv2.warpAffine(img, M, (width, height))
+                                aligned_count += 1
+                            else:
+                                print(f"Warning: Transformation rejected for image {i+1} (outside limits)")
+                                skipped_count += 1
+                        else:
+                            print(f"Warning: Not enough matches for alignment in image {i+1} ({len(matches)} matches)")
+                            skipped_count += 1
+                    else:
+                        print(f"Warning: No features detected in image {i+1}")
+                        skipped_count += 1
+                        
+                except Exception as e:
+                    print(f"Warning: Alignment failed for image {i+1}: {e}")
+                    skipped_count += 1
+            
+            out.write(aligned_img)
+            processed_count += 1
         else:
             print(f"Warning: Could not read image {row['path']}.")
+    
     out.release()
+    
+    if progress_callback:
+        progress_callback("Video creation complete!", total_images, total_images)
+    
+    print(f"Video created: {video_path}")
+    print(f"Processed {processed_count} of {total_images} images")
+    print(f"Reference frame: {ref_idx + 1}")
+    if use_alignment:
+        print(f"Successfully aligned: {aligned_count} images")
+        print(f"Skipped alignment: {skipped_count} images (outside limits or insufficient features)")
+        print("Image alignment was applied to stabilize the video")
 
 
 # test
@@ -206,6 +389,20 @@ class StopmotionGUI:
         self.create_button = tk.Button(master, text="Create Video", command=self.create_video, 
                                       bg='green', fg='white', font=('Arial', 12, 'bold'))
         self.create_button.pack(pady=30)
+
+        # Progress section (initially hidden)
+        self.progress_frame = tk.Frame(master)
+        
+        self.progress_label = tk.Label(self.progress_frame, text="", 
+                                      font=('Arial', 10), fg='blue')
+        self.progress_label.pack(pady=(10, 5))
+        
+        self.progress_bar = ttk.Progressbar(self.progress_frame, length=400, mode='determinate')
+        self.progress_bar.pack(pady=5)
+        
+        self.progress_detail = tk.Label(self.progress_frame, text="", 
+                                       font=('Arial', 9), fg='gray')
+        self.progress_detail.pack(pady=(5, 10))
 
     def load_and_resize_image(self, image_path, max_width=600):
         """Load and resize an image for preview"""
@@ -371,67 +568,104 @@ class StopmotionGUI:
                 self.update_preview_images()
                 self.update_duration_display()
 
+    def update_progress(self, message, current, total):
+        """Update progress bar and status message"""
+        self.progress_label.config(text=message)
+        
+        if total > 0:
+            progress_percent = (current / total) * 100
+            self.progress_bar['value'] = progress_percent
+            self.progress_detail.config(text=f"Progress: {current}/{total} ({progress_percent:.1f}%)")
+        else:
+            self.progress_bar['value'] = 0
+            self.progress_detail.config(text="")
+        
+        # Force GUI update
+        self.master.update_idletasks()
+
+    def show_progress(self):
+        """Show the progress section"""
+        self.progress_frame.pack(pady=10, before=self.create_button)
+        
+    def hide_progress(self):
+        """Hide the progress section"""
+        self.progress_frame.pack_forget()
+
     def create_video(self):
-        selected_location = self.location_var.get()
-        if not selected_location:
-            messagebox.showerror("Error", "Please select a location.")
-            return
-            
-        if not self.current_location_timestamps:
-            messagebox.showerror("Error", "No pictures available for the selected location.")
-            return
+        # Disable button to prevent multiple simultaneous creations
+        self.create_button.config(state='disabled', text='Creating Video...')
+        self.show_progress()
+        self.update_progress("Initializing...", 0, 100)
         
-        # Extract location name from the dropdown selection (remove the picture count part)
-        location = selected_location.split(' (')[0]
-        
-        # Get picture indices from sliders
-        since_idx = int(self.since_slider.get())
-        until_idx = int(self.until_slider.get())
-        
-        # Get the actual datetime objects from the selected picture indices
-        since = self.current_location_timestamps[since_idx]
-        until = self.current_location_timestamps[until_idx]
-        
-        # Add a small buffer to include the exact timestamps
-        since = since - timedelta(seconds=1)
-        until = until + timedelta(seconds=1)
-
-        # Get FPS from entry field
         try:
-            fps = float(self.fps_entry.get())
-            if fps <= 0:
-                messagebox.showerror("Error", "FPS must be greater than 0.")
+            selected_location = self.location_var.get()
+            if not selected_location:
+                messagebox.showerror("Error", "Please select a location.")
                 return
-        except ValueError:
-            messagebox.showerror("Error", "Please enter a valid FPS number.")
-            return
+                
+            if not self.current_location_timestamps:
+                messagebox.showerror("Error", "No pictures available for the selected location.")
+                return
+            
+            # Extract location name from the dropdown selection (remove the picture count part)
+            location = selected_location.split(' (')[0]
+            
+            # Get picture indices from sliders
+            since_idx = int(self.since_slider.get())
+            until_idx = int(self.until_slider.get())
+            
+            # Get the actual datetime objects from the selected picture indices
+            since = self.current_location_timestamps[since_idx]
+            until = self.current_location_timestamps[until_idx]
+            
+            # Add a small buffer to include the exact timestamps
+            since = since - timedelta(seconds=1)
+            until = until + timedelta(seconds=1)
 
-        try:
-            create_stopmotion_video(df, location, since, until, fps)
-            selected_count = until_idx - since_idx + 1
-            
-            # Open Windows Explorer to the output folder
-            output_path = "Z:\\videos\\stopmotion"
-            # Ensure the directory exists
-            os.makedirs(output_path, exist_ok=True)
-            
+            # Get FPS from entry field
             try:
-                # Use Windows path format and ensure it opens the correct folder
-                subprocess.run(['explorer', output_path], check=True)
-            except subprocess.CalledProcessError:
+                fps = float(self.fps_entry.get())
+                if fps <= 0:
+                    messagebox.showerror("Error", "FPS must be greater than 0.")
+                    return
+            except ValueError:
+                messagebox.showerror("Error", "Please enter a valid FPS number.")
+                return
+
+            try:
+                # Create video with progress callback
+                create_stopmotion_video(df, location, since, until, fps, self.update_progress)
+                selected_count = until_idx - since_idx + 1
+                
+                self.update_progress("Complete!", selected_count, selected_count)
+                
+                # Show success message
+                messagebox.showinfo("Success", f"Video created successfully!\n"
+                                  f"Location: {location}\n"
+                                  f"Pictures used: {selected_count}\n"
+                                  f"FPS: {fps}\n"
+                                  f"Features: Advanced image alignment with limits applied")
+                
+                # Open Windows Explorer to the output folder
+                output_path = "Z:\\videos\\stopmotion"
+                # Ensure the directory exists
+                os.makedirs(output_path, exist_ok=True)
+                
                 try:
-                    # Alternative method using /root flag
-                    subprocess.run(['explorer', '/root,', output_path], check=True)
-                except subprocess.CalledProcessError:
-                    # Final fallback - open parent directory
-                    parent_path = "Z:\\videos"
-                    os.makedirs(parent_path, exist_ok=True)
-                    subprocess.run(['explorer', parent_path], check=True)
-            except Exception:
-                pass  # Ignore explorer errors, don't let them break the success message
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to create video: {str(e)}")
+                    # Use Windows path format to open explorer
+                    subprocess.run(['explorer', output_path], check=True)
+                except Exception as e:
+                    print(f"Could not open explorer: {e}")
+                    # Don't show error to user for explorer issues
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to create video: {str(e)}")
+                
+        finally:
+            # Re-enable button regardless of success or failure
+            self.create_button.config(state='normal', text='Create Video')
+            # Hide progress after a short delay
+            self.master.after(2000, self.hide_progress)
 if __name__ == "__main__":
     root = tk.Tk()
     root.geometry("1800x2500")
