@@ -37,9 +37,10 @@ def filter_by_location_and_time(df: pd.DataFrame, location: str, since: datetime
     :param location: Location to filter by.
     :param since: Start datetime for filtering.
     :param until: End datetime for filtering.
-    :return: Filtered DataFrame.
+    :return: Filtered DataFrame sorted by timestamp.
     """
-    return df[(df['location'] == location) & (df['timestamp'] >= since) & (df['timestamp'] <= until)]
+    filtered_df = df[(df['location'] == location) & (df['timestamp'] >= since) & (df['timestamp'] <= until)]
+    return filtered_df.sort_values('timestamp')
 
 def create_stopmotion_video(df:pd.DataFrame, location:str, since:datetime, until:datetime, fps=30):
     OUTPUT_PATH= "Z:/videos/stopmotion"
@@ -49,6 +50,9 @@ def create_stopmotion_video(df:pd.DataFrame, location:str, since:datetime, until
     if selected_df.empty:
         print(f"No images found for location '{location}' between {since} and {until}.")
         return
+    
+    # Ensure the DataFrame is sorted by timestamp (redundant safety check)
+    selected_df = selected_df.sort_values('timestamp')
     
     first_img_path = selected_df.iloc[0]['path']
     first_img = cv2.imread(first_img_path)
@@ -203,7 +207,7 @@ class StopmotionGUI:
                                       bg='green', fg='white', font=('Arial', 12, 'bold'))
         self.create_button.pack(pady=30)
 
-    def load_and_resize_image(self, image_path, max_width=360):
+    def load_and_resize_image(self, image_path, max_width=600):
         """Load and resize an image for preview"""
         try:
             if not os.path.exists(image_path):
@@ -430,6 +434,6 @@ class StopmotionGUI:
             messagebox.showerror("Error", f"Failed to create video: {str(e)}")
 if __name__ == "__main__":
     root = tk.Tk()
-    root.geometry("800x900")
+    root.geometry("1800x2500")
     gui = StopmotionGUI(root)
     root.mainloop()
