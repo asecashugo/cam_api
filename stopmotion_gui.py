@@ -45,8 +45,9 @@ def filter_by_location_and_time(df: pd.DataFrame, location: str, since: datetime
 
 def find_typical_frame(selected_df, sample_size=10):
     """
-    Find a typical frame by analyzing feature matches across multiple images.
-    Returns the index of the image that has the most matches with other images.
+    Find a typical frame by analyzing edge feature matches across multiple images.
+    Uses edge detection to ensure consistency between day/night images.
+    Returns the index of the image that has the most edge matches with other images.
     """
     total_images = len(selected_df)
     if total_images <= 1:
@@ -68,8 +69,10 @@ def find_typical_frame(selected_df, sample_size=10):
         if img is None:
             continue
             
+        # Convert to grayscale and apply edge detection
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        kp, des = orb.detectAndCompute(gray, None)
+        edges = cv2.Canny(gray, 50, 150)
+        kp, des = orb.detectAndCompute(edges, None)
         
         if des is None:
             continue
@@ -85,7 +88,8 @@ def find_typical_frame(selected_df, sample_size=10):
                 continue
                 
             other_gray = cv2.cvtColor(other_img, cv2.COLOR_BGR2GRAY)
-            other_kp, other_des = orb.detectAndCompute(other_gray, None)
+            other_edges = cv2.Canny(other_gray, 50, 150)
+            other_kp, other_des = orb.detectAndCompute(other_edges, None)
             
             if other_des is None:
                 continue
@@ -97,7 +101,7 @@ def find_typical_frame(selected_df, sample_size=10):
             best_score = total_matches
             best_idx = i
     
-    print(f"Selected frame {best_idx + 1} as reference (best match score: {best_score})")
+    print(f"Selected frame {best_idx + 1} as reference (best edge match score: {best_score})")
     return best_idx
 
 def validate_transformation(M, width, height, max_rotation=10, max_translation_pct=10, max_scale_change=10):
@@ -171,21 +175,28 @@ def create_stopmotion_video(df: pd.DataFrame, location: str, since: datetime, un
     height, width = ref_img.shape[:2]
     gray_ref = cv2.cvtColor(ref_img, cv2.COLOR_BGR2GRAY)
     
+    # Use edge detection for consistent feature matching between day/night
+    edges_ref = cv2.Canny(gray_ref, 50, 150)
+    
     # Feature detector for image alignment
     orb = cv2.ORB_create(500)
     
-    # Detect keypoints and descriptors in reference image
-    kp_ref, des_ref = orb.detectAndCompute(gray_ref, None)
+    # Detect keypoints and descriptors in reference edge image
+    kp_ref, des_ref = orb.detectAndCompute(edges_ref, None)
     
     if des_ref is None:
-        print("Warning: No features detected in reference image. Proceeding without alignment.")
+        print("Warning: No edge features detected in reference image. Proceeding without alignment.")
         use_alignment = False
     else:
         use_alignment = True
 
+    # Setup video writers
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     video_path = os.path.join(OUTPUT_PATH, f"{location}_{since.strftime('%Y%m%d_%H%M%S')}_{until.strftime('%Y%m%d_%H%M%S')}.mp4")
+    edges_video_path = os.path.join(OUTPUT_PATH, f"{location}_{since.strftime('%Y%m%d_%H%M%S')}_{until.strftime('%Y%m%d_%H%M%S')}_edges.mp4")
+    
     out = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
+    out_edges = cv2.VideoWriter(edges_video_path, fourcc, fps, (width, height))
 
     processed_count = 0
     aligned_count = 0
@@ -199,10 +210,23 @@ def create_stopmotion_video(df: pd.DataFrame, location: str, since: datetime, un
         if img is not None:
             aligned_img = img
             
+            # Convert to grayscale and detect edges
+            gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            edges_img = cv2.Canny(gray_img, 50, 150)
+            
+            # Convert edges to 3-channel for video output
+            edges_colored = cv2.cvtColor(edges_img, cv2.COLOR_GRAY2BGR)
+            
+            if i == ref_idx:
+                # For reference frame, overlay original image with transparency
+                edges_with_ref = cv2.addWeighted(img, 0.7, edges_colored, 0.3, 0)
+                out_edges.write(edges_with_ref)
+            else:
+                out_edges.write(edges_colored)
+            
             if use_alignment and i != ref_idx:  # Skip alignment for reference image
                 try:
-                    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                    kp, des = orb.detectAndCompute(gray_img, None)
+                    kp, des = orb.detectAndCompute(edges_img, None)
                     
                     if des is not None:
                         matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
@@ -224,14 +248,14 @@ def create_stopmotion_video(df: pd.DataFrame, location: str, since: datetime, un
                                 print(f"Warning: Transformation rejected for image {i+1} (outside limits)")
                                 skipped_count += 1
                         else:
-                            print(f"Warning: Not enough matches for alignment in image {i+1} ({len(matches)} matches)")
+                            print(f"Warning: Not enough edge matches for alignment in image {i+1} ({len(matches)} matches)")
                             skipped_count += 1
                     else:
-                        print(f"Warning: No features detected in image {i+1}")
+                        print(f"Warning: No edge features detected in image {i+1}")
                         skipped_count += 1
                         
                 except Exception as e:
-                    print(f"Warning: Alignment failed for image {i+1}: {e}")
+                    print(f"Warning: Edge-based alignment failed for image {i+1}: {e}")
                     skipped_count += 1
             
             out.write(aligned_img)
@@ -240,17 +264,19 @@ def create_stopmotion_video(df: pd.DataFrame, location: str, since: datetime, un
             print(f"Warning: Could not read image {row['path']}.")
     
     out.release()
+    out_edges.release()
     
     if progress_callback:
         progress_callback("Video creation complete!", total_images, total_images)
     
-    print(f"Video created: {video_path}")
+    print(f"Main video created: {video_path}")
+    print(f"Edge debug video created: {edges_video_path}")
     print(f"Processed {processed_count} of {total_images} images")
     print(f"Reference frame: {ref_idx + 1}")
     if use_alignment:
         print(f"Successfully aligned: {aligned_count} images")
         print(f"Skipped alignment: {skipped_count} images (outside limits or insufficient features)")
-        print("Image alignment was applied to stabilize the video")
+        print("Edge-based image alignment was applied to handle day/night variations")
 
 
 # test
@@ -640,11 +666,12 @@ class StopmotionGUI:
                 self.update_progress("Complete!", selected_count, selected_count)
                 
                 # Show success message
-                messagebox.showinfo("Success", f"Video created successfully!\n"
+                messagebox.showinfo("Success", f"Videos created successfully!\n"
                                   f"Location: {location}\n"
                                   f"Pictures used: {selected_count}\n"
                                   f"FPS: {fps}\n"
-                                  f"Features: Advanced image alignment with limits applied")
+                                  f"Features: Edge-based alignment for day/night consistency\n"
+                                  f"Output: Main video + Edge debug video")
                 
                 # Open Windows Explorer to the output folder
                 output_path = "Z:\\videos\\stopmotion"
