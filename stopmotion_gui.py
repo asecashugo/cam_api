@@ -193,7 +193,7 @@ def create_stopmotion_video(df: pd.DataFrame, location: str, since: datetime, un
     # Setup video writers
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     video_path = os.path.join(OUTPUT_PATH, f"{location}_{since.strftime('%Y%m%d_%H%M%S')}_{until.strftime('%Y%m%d_%H%M%S')}.mp4")
-    edges_video_path = os.path.join(OUTPUT_PATH, f"{location}_{since.strftime('%Y%m%d_%H%M%S')}_{until.strftime('%Y%m%d_%H%M%S')}_edges.mp4")
+    edges_video_path = os.path.join(OUTPUT_PATH, f"{location}_{since.strftime('%Y%m%d_%H%M%S')}_{until.strftime('%Y%m%d_%H%M%S')}_edges.mp4");
     
     out = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
     out_edges = cv2.VideoWriter(edges_video_path, fourcc, fps, (width, height))
@@ -412,6 +412,12 @@ class StopmotionGUI:
                                          bg='lightgray')
         self.until_image_label.pack(pady=5)
 
+        # Limit to 1 image per day checkbox
+        self.limit_per_day_var = tk.BooleanVar(value=False)
+        self.limit_per_day_checkbox = tk.Checkbutton(master, text="Limit to 1 image per day (closest to noon)",
+                                                    variable=self.limit_per_day_var, onvalue=True, offvalue=False)
+        self.limit_per_day_checkbox.pack(pady=(0, 10))
+
         self.create_button = tk.Button(master, text="Create Video", command=self.create_video, 
                                       bg='green', fg='white', font=('Arial', 12, 'bold'))
         self.create_button.pack(pady=30)
@@ -575,9 +581,16 @@ class StopmotionGUI:
             self.current_location = location
             
             # Get all timestamps and paths for this location, sorted
-            location_df = df[df['location'] == location].sort_values('timestamp')
-            self.current_location_timestamps = location_df['timestamp'].tolist()
-            self.current_location_paths = location_df['path'].tolist()
+            # Optionally filter to 1 image per day (closest to noon)
+            if self.limit_per_day_var.get():
+                location_df = df[df['location'] == location].sort_values('timestamp')
+                filtered_df = self.filter_one_per_day(location_df)
+                self.current_location_timestamps = filtered_df['timestamp'].tolist()
+                self.current_location_paths = filtered_df['path'].tolist()
+            else:
+                location_df = df[df['location'] == location].sort_values('timestamp')
+                self.current_location_timestamps = location_df['timestamp'].tolist()
+                self.current_location_paths = location_df['path'].tolist()
             
             if self.current_location_timestamps:
                 max_idx = len(self.current_location_timestamps) - 1
@@ -617,6 +630,19 @@ class StopmotionGUI:
         """Hide the progress section"""
         self.progress_frame.pack_forget()
 
+    def filter_one_per_day(self, df):
+        """Return a DataFrame with only the image closest to noon for each day."""
+        if df.empty:
+            return df
+        # Add a column for the time difference from noon
+        noon = pd.to_datetime('12:00:00').time()
+        df = df.copy()
+        df['date'] = df['timestamp'].dt.date
+        df['noon_diff'] = df['timestamp'].dt.time.apply(lambda t: abs((datetime.combine(datetime.min, t) - datetime.combine(datetime.min, noon)).total_seconds()))
+        # For each day, keep the row with the smallest noon_diff
+        filtered = df.loc[df.groupby('date')['noon_diff'].idxmin()].sort_values('timestamp').reset_index(drop=True)
+        return filtered
+
     def create_video(self):
         # Disable button to prevent multiple simultaneous creations
         self.create_button.config(state='disabled', text='Creating Video...')
@@ -629,10 +655,6 @@ class StopmotionGUI:
                 messagebox.showerror("Error", "Please select a location.")
                 return
                 
-            if not self.current_location_timestamps:
-                messagebox.showerror("Error", "No pictures available for the selected location.")
-                return
-            
             # Extract location name from the dropdown selection (remove the picture count part)
             location = selected_location.split(' (')[0]
             
@@ -660,7 +682,12 @@ class StopmotionGUI:
 
             try:
                 # Create video with progress callback
-                create_stopmotion_video(df, location, since, until, fps, self.update_progress)
+                # If limiting per day, pass filtered DataFrame to video function
+                if self.limit_per_day_var.get():
+                    filtered_df = self.filter_one_per_day(df[df['location'] == location].sort_values('timestamp'))
+                    create_stopmotion_video(filtered_df, location, since, until, fps, self.update_progress)
+                else:
+                    create_stopmotion_video(df, location, since, until, fps, self.update_progress)
                 selected_count = until_idx - since_idx + 1
                 
                 self.update_progress("Complete!", selected_count, selected_count)
