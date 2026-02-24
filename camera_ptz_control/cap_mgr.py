@@ -6,7 +6,8 @@ with open("environ.json", "r") as f:
     environ = json.load(f)
 # Use a default if not found 'admin'
 pw = environ.get("pw", "admin")
-cam_ip = environ.get("camera_ip", "192.168.1.139")
+# cam_ip = environ.get("camera_ip", "192.168.1.139")
+cam_ip="192.168.1.139"
 
 url = f"rtsp://admin:{pw}@{cam_ip}:554/12"
 cap = cv2.VideoCapture(url)
